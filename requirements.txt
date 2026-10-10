@@ -1,7 +1,9 @@
-shiny
-htmltools
 duckdb
-pyarrow
-plotly
-shinywidgets
 pandas
+pyarrow
+numpy
+shiny
+shinywidgets
+plotly
+uvicorn
+watchfiles

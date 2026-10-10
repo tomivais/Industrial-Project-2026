@@ -6,7 +6,7 @@ root_dir = Path(__file__).parent
 
 csv_files = list(
     root_dir.glob(
-        "1. LONG_suction_HIGH_CONC_4ml_(and_3_times_resuction).csv"
+        "IDP_signal_example_1.csv"
     )
 )
 
