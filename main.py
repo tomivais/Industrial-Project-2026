@@ -22,7 +22,7 @@ try:
         "--reload",
         "--port",
         "8080",
-        "--host", "0.0.0.0",
+        "--host", "http://localhost/",
         str(ROOT / "src" / "app.py"),
     ],
     check=True
