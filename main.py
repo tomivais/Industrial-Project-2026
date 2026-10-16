@@ -12,21 +12,19 @@ subprocess.run(
 
 print("Käynnistetään Shiny...")
 try:
-
     subprocess.run(
-    [
-        sys.executable,
-        "-m",
-        "shiny",
-        "run",
-        "--reload",
-        "--port",
-        "8080",
-        "--host", "http://localhost/",
-        str(ROOT / "src" / "app.py"),
-    ],
-    check=True
-)
+        [
+            sys.executable,
+            "-m",
+            "shiny",
+            "run",
+            "--port", "8080",
+            "--host", "localhost",
+            str(ROOT / "src" / "app.py"),
+        ],
+        check=True
+    )
 
 except KeyboardInterrupt:
     print("\nShiny pysäytetty.")
+    
