@@ -1,9 +1,5 @@
 duckdb
-pandas
-pyarrow
-numpy
+plotly
 shiny
 shinywidgets
-plotly
-uvicorn
-watchfiles
+
