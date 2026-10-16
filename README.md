@@ -23,7 +23,7 @@ Kun kirjastot ja riippuvuuden on asennettu ja kyseiset muokkaukset on tehty, pro
 Kun: 
 - CSV‑tiedosto on projektin juuressa
 
-- convert.py:n glob‑haku on päivitetty
+- convert.py:n tiedostonimi on päivitetty
 
 - kirjastot on asennettu
 
