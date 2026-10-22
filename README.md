@@ -9,7 +9,11 @@ Repo pitää käytännössä sisällään:
 
 convert.py etsii CSV‑tiedostoa tietyllä nimellä, joten muokkaa sinne valitsemasi tiedoston nimi.
 Eli kohtaan:
-`sv_files = list(root_dir.glob("TIEDOSTON_NIMI.csv"))`
+`csv_files = list(
+    root_dir.glob(
+        "1. LONG_suction_HIGH_CONC_4ml_(and_3_times_resuction).csv"
+    )
+)`
 
 📦 Riippuvuuksien asennus
 Asenna projektin kirjastot komennolla:
