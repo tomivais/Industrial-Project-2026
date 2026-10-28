@@ -20,13 +20,8 @@ ui.p("Punaiset pisteet = havaittu poikkeama")
 @render_plotly
 def signal_plot():
 
-    df = duckdb.sql(
-        f"""
-        SELECT adc1
-        FROM '{PARQUET_PATH}'
-        USING SAMPLE 100000 ROWS
-        """
-    ).df()
+     df = duckdb.read_parquet(str(PARQUET_PATH)).df()
+
 
     df["adc1_filtered"] = (
         df["adc1"]
