@@ -1,0 +1,97 @@
+/* Navbaarin taustan väri */
+.navbar {
+    background-color: #1565C0 !important;
+    border: none !important;
+}
+
+/* Sovelluksen nimi ja sivujen fonttien väri */
+.navbar .navbar-brand,
+.navbar .nav-link {
+    color: white !important;
+}
+
+/* Efekti, kun hiiri viedään navbaarin päälle */
+.navbar .nav-link:hover {
+    background-color: #0D47A1 !important;
+    color: white !important;
+}
+
+/* Värin aktiiviselle sivulle */
+.navbar .nav-link.active {
+    background-color: #0D47A1 !important;
+    color: white !important;
+}
+
+
+/* =================================
+   SIVUN RAKENNE JA FOOTER
+================================= */
+
+/* Selainikkuna ja Shiny-sovelluksen juurielementti */
+
+html,
+body,
+#app {
+    min-height: 100%;
+    margin: 0;
+}
+
+/* Sovelluksen koko sivun rakenne */
+
+.app-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    display: flex;
+    flex-direction: column;
+}
+
+/* Shiny-navigointipalkki ja sen sisältö */
+
+.app-shell > .bslib-page-navbar {
+    flex: 1 0 auto;
+
+    display: flex;
+    flex-direction: column;
+}
+
+/* Footer */
+
+.app-footer {
+    background-color: #1565C0;
+    color: white;
+
+    margin-top: auto;
+    padding: 25px 40px;
+
+    width: 100%;
+    box-sizing: border-box;
+
+    flex-shrink: 0;
+}
+
+/* Footerin sisältö */
+
+.footer-content {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.footer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.app-footer hr {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.app-footer p {
+    font-size: 13px;
+    margin: 5px 0;
+}
+
+.footer-copyright {
+    opacity: 0.75;
+}

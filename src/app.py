@@ -1,104 +1,28 @@
-from pathlib import Path
 
-import duckdb
-import plotly.graph_objects as go
+from shiny import App, ui
 
-from shiny.express import ui
-from shinywidgets import render_plotly
+from navbar import navbar
+from footer import footer
 
-ui.page_opts(title="Signaalianalyysi")
+from home import home_ui
+from app1 import app1_ui, app1_server
+from app2 import app2_ui
 
-PARQUET_PATH = (
-    Path(__file__).parent.parent
-    / "data.parquet"
+
+app_ui = ui.div(
+    navbar(
+        home=home_ui(),
+        app1=app1_ui(),
+        app2=app2_ui(),
+    ),
+
+    footer(),
+
+    class_="app-shell"
 )
 
-ui.h3("Signaali")
-ui.p("Punaiset pisteet = havaittu poikkeama")
+def server(input, output, session):
+    app1_server(input, output, session)
 
 
-@render_plotly
-def signal_plot():
-    df = duckdb.read_parquet(str(PARQUET_PATH)).df()
-
-    df["adc1_filtered"] = (
-        df["adc1"]
-        .rolling(
-            window=20,
-            center=True,
-            min_periods=1
-        )
-        .mean()
-    )
-
-    median = df["adc1_filtered"].median()
-
-    mad = (
-        (df["adc1_filtered"] - median)
-        .abs()
-        .median()
-    )
-
-    k = 10
-
-    threshold_high = median + k * mad
-    threshold_low = median - k * mad
-
-    df["anomaly"] = (
-        (df["adc1_filtered"] > threshold_high)
-        |
-        (df["adc1_filtered"] < threshold_low)
-    )
-
-    anomalies = df[df["anomaly"]]
-
-    fig = go.Figure()
-
-    fig.add_trace(
-        go.Scatter(
-            x=df.index,
-            y=df["adc1_filtered"],
-            mode="lines",
-            name="Suodatettu signaali",
-            line=dict(
-                color="#8A00FF",
-                width=1
-            )
-        )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=anomalies.index,
-            y=anomalies["adc1_filtered"],
-            mode="markers",
-            name=f"Poikkeamat ({len(anomalies)})",
-            marker=dict(
-                color="red",
-                size=5
-            )
-        )
-    )
-
-    fig.add_hline(
-        y=threshold_high,
-        line_dash="dash",
-        line_color="red"
-    )
-
-    fig.add_hline(
-        y=threshold_low,
-        line_dash="dash",
-        line_color="red"
-    )
-
-    fig.update_layout(
-        template="simple_white",
-        hovermode="x unified",
-        height=700,
-        xaxis_title="Aika",
-        yaxis_title="Signaali",
-        legend_title="Selite"
-    )
-
-    return fig
+app = App(app_ui, server)
