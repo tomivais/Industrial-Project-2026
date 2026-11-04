@@ -5,7 +5,7 @@ import duckdb
 import pandas as pd
 import plotly.graph_objects as go
 
-from shiny import ui, render, reactive
+from shiny import ui, reactive
 from shinywidgets import output_widget, render_widget
 
 
@@ -21,14 +21,32 @@ PARQUET_PATH = (
 # Kuinka monta aikaikkunaa näytetään yleiskuvassa.
 MAX_OVERVIEW_BUCKETS = 2000
 
-# Enimmäismäärä alkuperäisiä pisteitä tarkassa zoomauksessa.
-MAX_DETAIL_POINTS = 250_000
+# Tarkka näkymä on aina näin monta peräkkäistä näytettä.
+WINDOW = 100_000
+
+# Ensimmäiset imupiikit alkavat tästä. Tiedoston alku on tasainen.
+DEFAULT_START = 5_390_000
 
 # Poikkeamien tunnistuksen herkkyys.
 K = 10
 
 # DuckDB:n muistiraja.
 DUCKDB_MEMORY_LIMIT = "4GB"
+
+# Kohinanvaimennus keskiarvoistaa näin monta peräkkäistä näytettä.
+SMOOTH_WINDOW = 20
+
+# Automaattinen kynnys on zoomatun alueen mediaani plus tämä luku.
+LEVEL_ABOVE_MEDIAN = 40
+
+# Oma kynnys, kun automaattinen valinta on pois päältä.
+DEFAULT_THRESHOLD = 550
+
+# Tätä lyhyempi kynnyksen ylitys on kohinaa, ei piikkiä.
+MIN_PEAK_WIDTH = 30
+
+# Näin lyhyt notkahdus kynnyksen alle ei katkaise samaa nousua.
+MAX_GAP = 15
 
 
 # ============================================================
@@ -48,6 +66,69 @@ def create_connection():
     return con
 
 
+def smooth_signal(values):
+    """Kohinanvaimennus: jokainen piste on 20 vierekkäisen näytteen keskiarvo."""
+
+    return values.rolling(
+        window=SMOOTH_WINDOW,
+        center=True,
+        min_periods=1
+    ).mean()
+
+
+def peak_indices(values, threshold=None):
+    """Yksi huippu per nousu. Kohinanvaimennus tehdään ennen tätä kutsua."""
+
+    if threshold is None:
+        threshold = float(values.median()) + LEVEL_ABOVE_MEDIAN
+
+    hot = (values > threshold).to_numpy()
+    labels = values.index.to_numpy()
+    peaks = []
+
+    i = 0
+    n = len(hot)
+
+    while i < n:
+
+        if not hot[i]:
+            i += 1
+            continue
+
+        j = i
+
+        while j < n and hot[j]:
+            j += 1
+
+        # Alle 15 näytteen notkahdus ei katkaise samaa nousua.
+        while True:
+
+            k = j
+
+            while k < n and k - j <= MAX_GAP and not hot[k]:
+                k += 1
+
+            if k < n and k - j <= MAX_GAP and hot[k]:
+
+                while k < n and hot[k]:
+                    k += 1
+
+                j = k
+
+            else:
+                break
+
+        # Alle 30 näytteen nousu jätetään pois.
+        if j - i >= MIN_PEAK_WIDTH:
+
+            segment = values.iloc[i:j]
+            peaks.append(labels[i + int(segment.to_numpy().argmax())])
+
+        i = j
+
+    return pd.Series(peaks), threshold
+
+
 # ============================================================
 # UI
 # ============================================================
@@ -56,50 +137,75 @@ def app1_ui():
 
     return ui.div(
 
-        ui.h3("Signaalin visualisointi"),
+        ui.busy_indicators.options(fade_opacity=1),
 
-        ui.p(
-            "Koko signaali näytetään tiivistettynä. "
-            "Zoomauksessa voidaan tarkastella alkuperäisiä näytteitä."
+        ui.h4("Tarkastele signaalin aluetta"),
+
+        ui.div(
+            ui.input_numeric(
+                "start_row",
+                "Alkurivi",
+                value=DEFAULT_START,
+                min=0,
+                step=WINDOW
+            ),
+
+            style=(
+                "display: flex; "
+                "gap: 20px; "
+                "flex-wrap: wrap; "
+                "align-items: end;"
+            )
+        ),
+
+        ui.div(
+            ui.input_checkbox(
+                "smooth",
+                "Liukuva keskiarvo (20 näytettä)",
+                value=True
+            ),
+
+            ui.input_checkbox(
+                "show_peaks",
+                "Merkitse kynnyksen ylittävät huiput",
+                value=True
+            ),
+
+            ui.input_checkbox(
+                "auto_threshold",
+                "Automaattinen kynnys",
+                value=True
+            ),
+
+            ui.input_numeric(
+                "threshold_value",
+                "Kynnys",
+                value=DEFAULT_THRESHOLD,
+                min=0,
+                step=10
+            ),
+
+            style=(
+                "display: flex; "
+                "gap: 20px; "
+                "flex-wrap: wrap; "
+                "align-items: end;"
+            )
+        ),
+
+        ui.div(
+            output_widget("detail_plot"),
+            class_="signal-plot-slot signal-plot-slot-detail",
         ),
 
         ui.hr(),
 
         ui.h4("Koko signaali"),
 
-        output_widget("overview_plot"),
-
-        ui.hr(),
-
-        ui.h4("Tarkastele signaalin aluetta"),
-
         ui.div(
-            ui.input_numeric(
-                "zoom_start",
-                "Alkuindeksi",
-                value=0,
-                min=0,
-                step=1
-            ),
-
-            ui.input_numeric(
-                "zoom_end",
-                "Loppuindeksi",
-                value=10000,
-                min=0,
-                step=1
-            ),
-
-            style=(
-                "display: flex; "
-                "gap: 20px; "
-                "flex-wrap: wrap;"
-            )
+            output_widget("overview_plot"),
+            class_="signal-plot-slot signal-plot-slot-overview",
         ),
-
-        ui.output_text("dataset_info"),
-
-        output_widget("detail_plot"),
 
     )
 
@@ -402,51 +508,28 @@ def app1_server(input, output, session):
 
         total_count = stats["count"]
 
-        start = input.zoom_start()
-        end = input.zoom_end()
-
-        if start is None or end is None:
-            return go.Figure()
-
-        start = max(0, int(start))
-        end = min(total_count - 1, int(end))
-
-        if start >= end:
-
-            fig = go.Figure()
-
-            fig.add_annotation(
-                text="Tarkista alku- ja loppuindeksi.",
-                showarrow=False
-            )
-
-            return fig
-
-        point_count = end - start + 1
+        start_value = input.start_row()
 
         fig = go.Figure()
 
-        # Liian suuri alue ei ladata RAM-muistiin.
-        if point_count > MAX_DETAIL_POINTS:
+        start = DEFAULT_START if start_value is None else max(0, int(start_value))
+        end = min(total_count, start + WINDOW)
+
+        if start >= end:
 
             fig.add_annotation(
-                text=(
-                    f"Valittu alue sisältää {point_count:,} näytettä. "
-                    f"Rajaa alue enintään "
-                    f"{MAX_DETAIL_POINTS:,} näytteeseen."
-                ),
-                showarrow=False,
-                font=dict(size=15)
+                text="Ei rivejä tällä alkukohdalla.",
+                showarrow=False
             )
 
             fig.update_layout(
                 template="simple_white",
-                height=450
+                height=550
             )
 
             return fig
 
-        # Haetaan vain valitun alueen alkuperäiset näytteet.
+        # Haetaan 100 000 peräkkäistä näytettä.
 
         df = con.execute(
             """
@@ -461,7 +544,7 @@ def app1_server(input, output, session):
 
             WHERE
                 file_row_number >= ?
-                AND file_row_number <= ?
+                AND file_row_number < ?
 
             ORDER BY file_row_number
             """,
@@ -474,22 +557,33 @@ def app1_server(input, output, session):
 
         ).fetchdf()
 
-        # Poikkeamat lasketaan alkuperäisistä näytteistä.
+        if df.empty:
 
-        anomaly_mask = (
-            (df["adc1"] > stats["threshold_high"])
-            |
-            (df["adc1"] < stats["threshold_low"])
-        )
+            fig.update_layout(
+                template="simple_white",
+                title="Ei rivejä tällä alueella",
+                height=550
+            )
 
-        anomalies = df[anomaly_mask]
+            return fig
+
+        df = df.set_index("sample_idx")
+
+        # Kohinanvaimennus ennen piikkien etsintää.
+        # Jos tasoitus on pois, piikit etsitään raa'asta signaalista.
+        if input.smooth():
+            signal = smooth_signal(df["adc1"])
+            signal_name = "Tasoitettu signaali"
+        else:
+            signal = df["adc1"]
+            signal_name = "Alkuperäinen signaali"
 
         fig.add_trace(
             go.Scattergl(
-                x=df["sample_idx"],
-                y=df["adc1"],
+                x=signal.index,
+                y=signal,
                 mode="lines",
-                name="Alkuperäinen signaali",
+                name=signal_name,
                 line=dict(
                     color="#8A00FF",
                     width=1
@@ -497,30 +591,41 @@ def app1_server(input, output, session):
             )
         )
 
-        fig.add_trace(
-            go.Scattergl(
-                x=anomalies["sample_idx"],
-                y=anomalies["adc1"],
-                mode="markers",
-                name=f"Poikkeamat ({len(anomalies)})",
-                marker=dict(
-                    color="red",
-                    size=6
+        if input.show_peaks():
+
+            if input.auto_threshold():
+                chosen = None
+            else:
+                typed = input.threshold_value()
+                chosen = (
+                    DEFAULT_THRESHOLD
+                    if typed is None
+                    else float(typed)
                 )
+
+            peaks, threshold = peak_indices(signal, chosen)
+
+            if len(peaks):
+
+                fig.add_trace(
+                    go.Scattergl(
+                        x=peaks,
+                        y=signal.loc[peaks],
+                        mode="markers",
+                        name=f"Piikit ({len(peaks)})",
+                        marker=dict(
+                            color="red",
+                            size=9,
+                            symbol="diamond"
+                        )
+                    )
+                )
+
+            fig.add_hline(
+                y=threshold,
+                line_dash="dash",
+                line_color="red"
             )
-        )
-
-        fig.add_hline(
-            y=stats["threshold_high"],
-            line_dash="dash",
-            line_color="red"
-        )
-
-        fig.add_hline(
-            y=stats["threshold_low"],
-            line_dash="dash",
-            line_color="red"
-        )
 
         fig.update_layout(
             template="simple_white",
@@ -533,28 +638,3 @@ def app1_server(input, output, session):
         )
 
         return fig
-
-
-    # --------------------------------------------------------
-    # 5. Tietojen näyttäminen käyttöliittymässä.
-    # --------------------------------------------------------
-
-    @render.text
-    def dataset_info():
-
-        stats = global_stats()
-
-        start = input.zoom_start()
-        end = input.zoom_end()
-
-        return (
-            f"Aineiston koko: {stats['count']:,} näytettä\n"
-            f"Mediaani: {stats['median']:.4f}\n"
-            f"MAD: {stats['mad']:.4f}\n"
-            f"Poikkeamaraja: "
-            f"{stats['threshold_low']:.4f} – "
-            f"{stats['threshold_high']:.4f}\n"
-            f"Zoomausalue: {start} – {end}\n"
-            f"Enimmäismäärä tarkassa näkymässä: "
-            f"{MAX_DETAIL_POINTS:,} näytettä"
-        )

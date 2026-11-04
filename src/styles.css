@@ -23,6 +23,23 @@
 }
 
 
+/* Kuvaajien paikka pysyy samana, kun toinen kuvaaja lasketaan uudelleen. */
+
+.signal-plot-slot-detail {
+    height: 550px;
+    min-height: 550px;
+}
+
+.signal-plot-slot-overview {
+    height: 650px;
+    min-height: 650px;
+}
+
+.signal-plot-slot .recalculating,
+.signal-plot-slot .recalculating > * {
+    opacity: 1 !important;
+}
+
 /* =================================
    SIVUN RAKENNE JA FOOTER
 ================================= */
