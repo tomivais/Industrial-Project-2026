@@ -6,7 +6,7 @@ from footer import footer
 
 from home import home_ui
 from app1 import app1_ui, app1_server
-from app2 import app2_ui
+from app2 import app2_ui, app2_server
 
 
 app_ui = ui.div(
@@ -23,6 +23,7 @@ app_ui = ui.div(
 
 def server(input, output, session):
     app1_server(input, output, session)
+    app2_server(input, output, session)
 
 
 app = App(app_ui, server)
