@@ -35,9 +35,66 @@
     min-height: 650px;
 }
 
+.app2-drop-zone {
+    border: 2px dashed #1565C0;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 12px 0 18px;
+    background: #f5f9ff;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.app2-drop-zone.app2-drag-over {
+    background: #e3f2fd;
+    border-color: #0D47A1;
+}
+
 .signal-plot-slot .recalculating,
 .signal-plot-slot .recalculating > * {
     opacity: 1 !important;
+}
+
+.app2-summary-panel {
+    margin: 18px 0 24px;
+}
+
+.app2-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 10px;
+}
+
+.app2-summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 82px;
+    padding: 12px 14px;
+    border: 1px solid #d8e0ea;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.app2-summary-card strong {
+    color: #17365d;
+    font-size: 1.35rem;
+}
+
+.app2-summary-card small,
+.app2-summary-label {
+    color: #596579;
+}
+
+.app2-summary-small {
+    border-top: 3px solid #42a5f5;
+}
+
+.app2-summary-medium {
+    border-top: 3px solid #ffb300;
+}
+
+.app2-summary-large {
+    border-top: 3px solid #e53935;
 }
 
 /* =================================

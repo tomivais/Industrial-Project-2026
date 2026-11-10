@@ -7,11 +7,10 @@ from shiny import ui
 SOURCE_DIR = Path(__file__).resolve().parent
 
 
-def navbar(home, app1, app2):
+def navbar(home, app2):
     return ui.page_navbar(
         ui.nav_panel("Etusivu", home),
-        ui.nav_panel("Signaali Analysii – Method A", app1),
-        ui.nav_panel("Signaali Analysii – Method B", app2),
+        ui.nav_panel("Signaalin analyysi", app2),
 
         title="Industrial Project",
         id="section",

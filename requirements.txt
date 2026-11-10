@@ -1,6 +1,7 @@
 duckdb
+numpy
+pandas
 plotly
 shiny
 shinywidgets
 scipy
-
