@@ -31,8 +31,8 @@
 }
 
 .signal-plot-slot-overview {
-    height: 650px;
-    min-height: 650px;
+    height: 320px;
+    min-height: 320px;
 }
 
 .app2-drop-zone {
@@ -49,13 +49,49 @@
     border-color: #0D47A1;
 }
 
+.app2-control-row .shiny-input-container {
+    margin-bottom: 0;
+}
+
+.app2-labeled-button {
+    display: flex;
+    flex-direction: column;
+}
+
+.app2-button-spacer {
+    display: block;
+    height: 1.5em;
+    margin-bottom: 5px;
+    visibility: hidden;
+}
+
+.app2-summary-accordion {
+    margin: 8px 0 14px;
+}
+
 .signal-plot-slot .recalculating,
 .signal-plot-slot .recalculating > * {
     opacity: 1 !important;
 }
 
 .app2-summary-panel {
-    margin: 18px 0 24px;
+    min-width: 0;
+}
+
+.app2-overview-summary-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 16px;
+    margin: 10px 0 16px;
+}
+
+.app2-overview-panel {
+    min-width: 0;
+}
+
+.app2-overview-panel h4 {
+    margin-top: 0;
 }
 
 .app2-summary-grid {
@@ -95,6 +131,17 @@
 
 .app2-summary-large {
     border-top: 3px solid #e53935;
+}
+
+@media (max-width: 850px) {
+    .app2-overview-summary-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .signal-plot-slot-overview {
+        height: 300px;
+        min-height: 300px;
+    }
 }
 
 /* =================================

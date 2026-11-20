@@ -26,9 +26,9 @@ LOOKAHEAD_SAMPLES = MAX_PEAK_WIDTH_SAMPLES // 2
 MAX_DETAIL_POINTS = 10_000
 MAX_OVERVIEW_POINTS = 8_000
 SMOOTH_WINDOW = 20
-# Tuned against the 15-event high, middle, and low reference sections.
-MIN_PEAK_DISTANCE_SAMPLES = int(0.30 * SAMPLE_RATE_HZ)
-DEFAULT_MIN_PEAK_HEIGHT = 35.0
+# A 20 ms spacing allows nearby peaks while reducing duplicate detections per pulse.
+MIN_PEAK_DISTANCE_SAMPLES = int(0.02 * SAMPLE_RATE_HZ)
+DEFAULT_MIN_PEAK_HEIGHT = 10.0
 PARQUET_PATH = Path(__file__).resolve().parent.parent / "data.parquet"
 
 
@@ -192,7 +192,18 @@ def get_dataset_info(path):
     )
     if signal_column is None:
         raise ValueError("Tiedostosta ei löytynyt numeerista mittaussaraketta.")
-    return {"path": path, "signal_column": signal_column, "total_samples": int(count_row[0])}
+    return {
+        "path": path,
+        "signal_column": signal_column,
+        "signal_columns": [name for name, _ in signal_candidates],
+        "total_samples": int(count_row[0]),
+    }
+
+
+def selected_signal_column(info, requested_column):
+    if requested_column in info["signal_columns"]:
+        return requested_column
+    return info["signal_column"]
 
 
 def read_blocks(dataset, start_sample, end_sample, block_size=BLOCK_SIZE):
@@ -351,41 +362,64 @@ def app2_ui():
         """),
         ui.output_text("app2_upload_status"),
         ui.div(
-            ui.input_action_button("app2_previous", "← Edellinen jakso"),
+            ui.div(
+                ui.tags.label(".", class_="app2-button-spacer"),
+                ui.input_action_button("app2_previous", "← Edellinen jakso"),
+                class_="app2-labeled-button",
+            ),
             ui.input_numeric(
                 "app2_start_seconds", "Alkuaika (s)", DEFAULT_START_SECONDS, min=0, step=1
             ),
-            ui.input_action_button("app2_next", "Seuraava jakso →"),
+            ui.div(
+                ui.tags.label(".", class_="app2-button-spacer"),
+                ui.input_action_button("app2_next", "Seuraava jakso →"),
+                class_="app2-labeled-button",
+            ),
             ui.input_numeric(
                 "app2_duration_seconds", "Jakson pituus (s)", DEFAULT_WINDOW_SECONDS,
                 min=0.1, step=0.5,
+            ),
+            ui.input_select(
+                "app2_signal_column", "Mittauskanava",
+                choices={"adc1": "adc1", "adc2": "adc2"}, selected="adc1",
             ),
             ui.input_numeric(
                 "app2_min_amplitude", "Piikin vähimmäiskorkeus perustasosta",
                 DEFAULT_MIN_PEAK_HEIGHT, min=0, step=1,
             ),
-            style="display: flex; gap: 12px; flex-wrap: wrap; align-items: end;",
-        ),
-        ui.div(
-            ui.input_checkbox("app2_show_overview", "Näytä koko signaali yleiskuvassa"),
-        ),
-        ui.div(
             ui.input_checkbox(
                 "app2_denoise",
-                "Kohinanpoisto: liukuva keskiarvo (20 näytettä)",
+                "Kohinanpoisto (20 näytettä)",
                 value=True,
             ),
-            style="margin-top: 8px;",
+            style="display: flex; gap: 12px; flex-wrap: wrap; align-items: end;",
+            class_="app2-control-row",
         ),
-        ui.output_text("app2_dataset_info"),
-        ui.div(
-            ui.h4("Analyysin yhteenveto"),
-            ui.output_ui("app2_summary"),
-            class_="app2-summary-panel",
-        ),
-        ui.div(
-            output_widget("app2_overview_plot"),
-            class_="signal-plot-slot signal-plot-slot-overview",
+        ui.accordion(
+            ui.accordion_panel(
+                "Yhteenveto ja koko signaali",
+                ui.output_text("app2_dataset_info"),
+                ui.div(
+                    ui.div(
+                        ui.h4("Analyysin yhteenveto"),
+                        ui.output_ui("app2_summary"),
+                        class_="app2-summary-panel",
+                    ),
+                    ui.div(
+                        ui.h4("Koko signaali"),
+                        ui.div(
+                            output_widget("app2_overview_plot"),
+                            class_="signal-plot-slot signal-plot-slot-overview",
+                        ),
+                        class_="app2-overview-panel",
+                    ),
+                    class_="app2-overview-summary-grid",
+                ),
+            ),
+            id="app2_analysis_summary",
+            open=False,
+            multiple=False,
+            class_="app2-summary-accordion",
         ),
         ui.div(
             output_widget("app2_peak_plot"),
@@ -445,6 +479,20 @@ def app2_server(input, output, session):
         return get_dataset_info(path)
 
     @reactive.effect
+    def _update_signal_channel_choices():
+        path = current_path.get()
+        if path is None:
+            return
+        info = get_dataset_info(path)
+        choices = {column: column for column in info["signal_columns"]}
+        ui.update_select(
+            "app2_signal_column",
+            choices=choices,
+            selected=info["signal_column"],
+            session=session,
+        )
+
+    @reactive.effect
     @reactive.event(input.app2_previous)
     def _go_to_previous_period():
         length = finite_float(input.app2_duration_seconds(), DEFAULT_WINDOW_SECONDS)
@@ -475,16 +523,16 @@ def app2_server(input, output, session):
         )
         duration = selected_duration_seconds(input.app2_duration_seconds(), info["total_samples"])
         end = info["total_samples"] / SAMPLE_RATE_HZ
+        signal_column = selected_signal_column(info, input.app2_signal_column())
         return (
             f"Aineisto: {info['total_samples']:,} näytettä ({end:.2f} s) | "
             f"Näytteenottotaajuus: {SAMPLE_RATE_HZ:,} näytettä/s\n"
+            f"Mittauskanava: {signal_column}\n"
             f"Tarkasteltava jakso: {start:.2f}–{min(start + duration, end):.2f} s"
         )
 
     @render_widget
     def app2_overview_plot():
-        if not input.app2_show_overview():
-            return go.Figure()
         info = dataset()
         if info is None:
             fig = go.Figure()
@@ -492,7 +540,8 @@ def app2_server(input, output, session):
             return fig
         started = time.perf_counter()
         bucket_size = max(1, math.ceil(info["total_samples"] / MAX_OVERVIEW_POINTS))
-        column = quote_identifier(info["signal_column"])
+        signal_column = selected_signal_column(info, input.app2_signal_column())
+        column = quote_identifier(signal_column)
         with duckdb.connect(database=":memory:") as con:
             frame = con.execute(
                 f"""
@@ -526,7 +575,7 @@ def app2_server(input, output, session):
         duration = selected_duration_seconds(input.app2_duration_seconds(), info["total_samples"])
         fig.add_vrect(x0=start, x1=start + duration, fillcolor="orange", opacity=0.2, line_width=0)
         fig.update_layout(
-            template="simple_white", height=320,
+            template="simple_white", height=300,
             title=f"Koko signaali ({len(overview_samples):,} minimi-/maksimipistettä, {time.perf_counter() - started:.2f} s)",
             xaxis_title="Aika (s)", yaxis_title="Mittausarvo", uirevision="app2-overview",
         )
@@ -538,6 +587,8 @@ def app2_server(input, output, session):
         if info is None:
             return None
         total_samples = info["total_samples"]
+        signal_column = selected_signal_column(info, input.app2_signal_column())
+        analysis_dataset = {**info, "signal_column": signal_column}
         duration = selected_duration_seconds(input.app2_duration_seconds(), total_samples)
         duration_samples = max(1, int(duration * SAMPLE_RATE_HZ))
         min_amplitude = max(0.0, finite_float(input.app2_min_amplitude(), DEFAULT_MIN_PEAK_HEIGHT))
@@ -553,7 +604,7 @@ def app2_server(input, output, session):
         plot_buffer = SignalPlotBuffer(start_sample, duration_samples)
         selected_peaks = []
         started = time.perf_counter()
-        for indices, values in read_blocks(info, read_start, read_end):
+        for indices, values in read_blocks(analysis_dataset, read_start, read_end):
             block_start = int(indices[0])
             peaks, baseline, threshold, processed = detector.process(
                 values, block_start, min_amplitude,
