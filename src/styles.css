@@ -22,6 +22,16 @@
     color: white !important;
 }
 
+/* Home sivun korttien leveys*/
+.welcome-card {
+    width: 50%;
+    margin: 0 0 2rem 0;
+}
+
+.start-card {
+    width: 40%;
+    margin: 0 0 2rem 0;
+}
 
 /* Kuvaajien paikka pysyy samana, kun toinen kuvaaja lasketaan uudelleen. */
 
