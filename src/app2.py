@@ -14,6 +14,7 @@ from shiny import reactive, render, ui
 from shinywidgets import output_widget, render_widget
 
 
+# The device produces 50,000 samples per second; analysis runs in one-second blocks.
 SAMPLE_RATE_HZ = 50_000
 BLOCK_SIZE = SAMPLE_RATE_HZ
 DEFAULT_START_SECONDS = 0.0
@@ -33,6 +34,7 @@ PARQUET_PATH = Path(__file__).resolve().parent.parent / "data.parquet"
 
 
 class DetectedPeak:
+    # Store the values needed to show and classify one detected peak.
     def __init__(self, sample, amplitude, raw_value, baseline, prominence, width_samples):
         self.sample = sample
         self.amplitude = amplitude
@@ -78,6 +80,7 @@ class StreamingPeakDetector:
 
         detect_active = start_sample + block.size > detect_from
         if detect_active:
+            # Estimate noise robustly from changes between neighboring samples.
             differences = np.diff(processed)
             if differences.size:
                 median_difference = np.median(differences)
@@ -91,6 +94,7 @@ class StreamingPeakDetector:
         threshold = max(min_amplitude, 5.0 * noise_sigma)
         min_prominence = max(6.0, 2.5 * noise_sigma)
 
+        # Keep the previous tail so peaks crossing a block boundary stay intact.
         combined_residual = np.concatenate((self.tail_residual, residual))
         combined_baseline = np.concatenate((self.tail_baseline, baseline))
         combined_raw = np.concatenate((self.tail_raw, processed))
@@ -106,6 +110,7 @@ class StreamingPeakDetector:
                 distance=self.min_distance,
                 width=(self.min_width, self.max_width),
             )
+            # Wait for enough following samples to measure a peak's full width.
             safe_end = start_sample + block.size - max(1, self.max_width // 2)
             for index, location in enumerate(locations):
                 sample_index = global_offset + int(location)
@@ -245,6 +250,7 @@ def plot_indices(length, max_points):
 def minmax_sample(indices, values, max_points):
     if len(values) <= max_points:
         return indices, values
+    # Keep each bin's minimum and maximum so narrow peaks remain visible.
     edges = plot_indices(len(values), max_points)
     out_indices = []
     out_values = []
@@ -451,6 +457,7 @@ def app2_server(input, output, session):
             destination.unlink(missing_ok=True)
             with duckdb.connect(database=":memory:") as con:
                 con.execute("SET preserve_insertion_order = true")
+                # Convert the upload to compressed Parquet for later block-wise reads.
                 con.execute(
                     f"""
                     COPY (
@@ -598,6 +605,7 @@ def app2_server(input, output, session):
             total_samples / SAMPLE_RATE_HZ,
         )
         start_sample = int(start_seconds * SAMPLE_RATE_HZ)
+        # Read context before and after the selected interval for stable filtering and peak widths.
         read_start = max(0, start_sample - WARMUP_SAMPLES)
         read_end = min(total_samples, start_sample + int(duration * SAMPLE_RATE_HZ) + LOOKAHEAD_SAMPLES)
         detector = StreamingPeakDetector()
@@ -648,6 +656,7 @@ def app2_server(input, output, session):
         reference_height = max(1.0, result["min_amplitude"])
         small_limit = 2.0 * reference_height
         large_limit = 5.0 * reference_height
+        # Use the configured minimum peak height as the basis for size categories.
         sizes = [peak.amplitude for peak in peaks]
         small_count = sum(height < small_limit for height in sizes)
         medium_count = sum(small_limit <= height < large_limit for height in sizes)
