@@ -10,10 +10,11 @@ PARQUET_FILE = ROOT / "data.parquet"
 SRC = ROOT / "src"
 
 
-# Muunnetaan vain, jos Parquet puuttuu
-# tai CSV on uudempi kuin Parquet.
+# Muunnetaan vain, jos CSV löytyy ja:
+# 1. Parquet puuttuu
+# 2. CSV on uudempi kuin Parquet
 
-if (
+if CSV_FILE.exists() and (
     not PARQUET_FILE.exists()
     or CSV_FILE.stat().st_mtime > PARQUET_FILE.stat().st_mtime
 ):
@@ -23,9 +24,16 @@ if (
         [sys.executable, str(ROOT / "convert.py")],
         check=True
     )
+
+##Jos projekti juuressa ei ole a CSV-tiedostoa, niin ei yritetä ajaa convert.py:tä.
+elif not CSV_FILE.exists():
+    print("CSV-tiedostoa ei löydy. Ohitetaan muunnos.")
+
 else:
     print("Parquet on ajan tasalla. Muunnosta ei tarvita.")
 
+
+# Käynnistetään Shiny joka tapauksessa
 
 print("Käynnistetään Shiny...")
 
